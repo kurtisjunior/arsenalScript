@@ -1,0 +1,41 @@
+<div class="fixture-group">
+    <div class="anchor"><a id="2022Aug05"></a></div>
+    <div class="fixture-date">Friday 5th August 2022</div>
+    <div class="fixture">
+        <div class="fixture__time">20:00</div>
+        <div class="fixture__teams">Arsenal v Leeds </div>
+        <div class="fixture__competition">Premier League</div>
+        <div class="fixture__channel">
+            <div class="span3 channels"><span class="channel-pill"
+                    style="background-color: #e31a00;border: 0;color: rgba(255, 255, 255, 1.0);">Sky Sports
+                    Main Event</span><span class="channel-pill"
+                    style="background-color: #e31a00;border: 0;color: rgba(255, 255, 255, 1.0);">Sky Sports
+                    Premier League</span><span class="channel-pill"
+                    style="background-color: #e31a00;border: 0;color: rgba(255, 255, 255, 1.0);">Sky Sports
+                    Ultra HD</span></div>
+        </div>
+    </div>
+    <div class="anchor"><a id="2022Oct18"></a></div>
+    <div class="fixture-date">Tuesday 18th October 2022</div>
+    <div class="fixture">
+        <div class="fixture__time">19:45</div>
+        <div class="fixture__teams">Arsenal v Man City </div>
+        <div class="fixture__competition">Premier League</div>
+        <div class="fixture__channel">
+            <div class="span3 channels"><span class="channel-pill"
+                    style="background-color: #00a8e1;border: 0;color: rgba(15, 23, 30, 1.0);">Amazon Prime
+                    Video</span></div>
+        </div>
+    </div>
+    <div class="anchor"><a id="2022Dec26"></a></div>
+    <div class="fixture-date">Monday 26th December 2022</div>
+    <div class="fixture">
+        <div class="fixture__time">15:00</div>
+        <div class="fixture__teams">Arsenal v West Ham United </div>
+        <div class="fixture__competition">Premier League</div>
+        <div class="fixture__channel">
+            <div class="span3 channels"><span class="channel-pill"
+                    style="background-color: #00a8e1;border: 0;color: rgba(15, 23, 30, 1.0);">Amazon Prime
+                    Video</span></div>
+        </div>
+</div>

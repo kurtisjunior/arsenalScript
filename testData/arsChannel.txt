@@ -1,0 +1,9 @@
+<div class="fixture__channel">
+        <div class="span3 channels"><span class="channel-pill"
+                style="background-color: #e31a00;border: 0;color: rgba(255, 255, 255, 1.0);">Sky Sports
+                Main Event</span><span class="channel-pill"
+                style="background-color: #e31a00;border: 0;color: rgba(255, 255, 255, 1.0);">Sky Sports
+                Premier League</span><span class="channel-pill"
+                style="background-color: #e31a00;border: 0;color: rgba(255, 255, 255, 1.0);">Sky Sports
+                Ultra HD</span></div>
+</div>

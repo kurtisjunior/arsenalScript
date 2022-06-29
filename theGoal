@@ -1,0 +1,20 @@
+Options:
+1. web crawl https://www.live-footballontv.com/arsenal-on-tv.html
+2. find api for both
+3. find and hit two seperate api's
+
+Add the script as an alias 'arsenal'
+
+Return something like:
+
+Next fixture: 'someone'
+Channel: 'some channel'
+Date: 'some date'
+
+Add a post to a DB for when Chlo is using the script
+1. increment counter
+2. Use AWS to send me a text message everytime she does with the latetest counter
+
+
+
+
