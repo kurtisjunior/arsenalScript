@@ -7,8 +7,6 @@ import re
 #curl the site
 arsenalSiteData = requests.get('https://www.live-footballontv.com/arsenal-on-tv.html')
 
-# print(type(arsenalSiteData))
-
 #deconde from bytes to string
 arsenalSiteDataToString = arsenalSiteData.content.decode("utf-8")
 
@@ -43,10 +41,6 @@ def returnTime(arsContent):
     findTime = re.search('(?<=fixture__time">)([\\s\\S]*?)(?=</div>)', arsContent)
     time = findTime.group(0)
     return time.strip()
-
-# def saveCallCount():
-#     #post to an endpoint to save count
-#     return ""
 
 date = returnDate(trimArsenalSiteData.group(0))
 time = returnTime(trimArsenalSiteData.group(0))
