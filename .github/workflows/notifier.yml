@@ -1,0 +1,30 @@
+name: Arsenal Match Notifier
+
+on:
+  schedule:
+    # Run at 11 PM UTC (6 PM EST) daily
+    - cron: '0 23 * * *'
+  workflow_dispatch:  # Allow manual triggers
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run notifier
+        env:
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
+          USER_TIMEZONE: 'America/New_York'
+        run: python main.py
