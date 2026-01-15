@@ -1,0 +1,3 @@
+# This directory stores match odds data files
+# Format: {match_id}.json
+# Example: 20260120_arsenal_vs_aston_villa.json

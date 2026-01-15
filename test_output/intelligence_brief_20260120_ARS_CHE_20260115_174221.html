@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arsenal Intelligence Brief - Chelsea</title>
+    <style>
+        :root {
+            --arsenal-red: #EF0107;
+            --arsenal-gold: #9C824A;
+            --arsenal-navy: #063672;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text-light: #eaeaea;
+            --text-muted: #a0a0a0;
+            --success: #00c853;
+            --warning: #ffc107;
+            --danger: #ff5252;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--arsenal-red), var(--arsenal-navy));
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 4px solid var(--arsenal-gold);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        header .match-info {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 25px;
+            margin: 20px 0;
+            border-left: 4px solid var(--arsenal-red);
+        }
+
+        .section h2 {
+            color: var(--arsenal-gold);
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+            border-bottom: 1px solid var(--arsenal-gold);
+            padding-bottom: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card h3 {
+            color: var(--arsenal-red);
+            margin-bottom: 10px;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+        }
+
+        .stat-value {
+            font-weight: bold;
+        }
+
+        .prediction-box {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(239,1,7,0.2), rgba(6,54,114,0.2));
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .prediction-outcome {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--arsenal-gold);
+        }
+
+        .prediction-confidence {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+        }
+
+        .probability-bar {
+            display: flex;
+            height: 40px;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .prob-win {
+            background: var(--success);
+        }
+
+        .prob-draw {
+            background: var(--warning);
+        }
+
+        .prob-loss {
+            background: var(--danger);
+        }
+
+        .prob-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .sentiment-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .sentiment-positive {
+            background: var(--success);
+            color: #000;
+        }
+
+        .sentiment-neutral {
+            background: var(--warning);
+            color: #000;
+        }
+
+        .sentiment-negative {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .value-opportunity {
+            background: linear-gradient(135deg, rgba(0,200,83,0.2), rgba(0,200,83,0.1));
+            border-left: 4px solid var(--success);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .value-opportunity.high-value {
+            border-left-color: var(--arsenal-gold);
+            background: linear-gradient(135deg, rgba(156,130,74,0.3), rgba(156,130,74,0.1));
+        }
+
+        .quote {
+            background: rgba(255,255,255,0.05);
+            padding: 15px 20px;
+            border-left: 3px solid var(--arsenal-gold);
+            margin: 10px 0;
+            font-style: italic;
+        }
+
+        .quote-author {
+            text-align: right;
+            color: var(--text-muted);
+            margin-top: 10px;
+            font-style: normal;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        th {
+            background: rgba(239,1,7,0.2);
+            color: var(--arsenal-gold);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .status-success { color: var(--success); }
+        .status-warning { color: var(--warning); }
+        .status-error { color: var(--danger); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Arsenal Intelligence Brief</h1>
+        <div class="match-info">
+            Arsenal vs Chelsea | 2026-01-20 | Home
+        </div>
+        <div class="match-info" style="margin-top: 10px;">
+            Match ID: 20260120_ARS_CHE
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Executive Summary -->
+        <section class="section">
+            <h2>Executive Summary</h2>
+            <div class="prediction-box">
+                <div class="prediction-outcome">
+                    W
+                </div>
+                <div class="prediction-confidence">
+                    Confidence: 100.0%
+                </div>
+            </div>
+
+            
+        <div class="probability-bar">
+            <div class="prob-segment prob-win" style="width: 99.99938806168895%;">W 100%</div>
+            <div class="prob-segment prob-draw" style="width: 0.0006115826474303326%;">D 0%</div>
+            <div class="prob-segment prob-loss" style="width: 3.5566362727412953e-07%;">L 0%</div>
+        </div>
+        
+
+            <div class="grid">
+                <div class="card">
+                    <h3>Sentiment</h3>
+                    <p>
+                        <span class="sentiment-badge sentiment-neutral">
+                            UNKNOWN
+                        </span>
+                    </p>
+                    <p style="margin-top: 10px; color: var(--text-muted);">
+                        Score: +0.00
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3>Value Opportunities</h3>
+                    <p style="font-size: 2rem; color: var(--arsenal-gold);">
+                        0
+                    </p>
+                    <p style="color: var(--text-muted);">High value bets identified</p>
+                </div>
+
+                <div class="card">
+                    <h3>Recent Form</h3>
+                    <p style="font-size: 1.5rem; letter-spacing: 3px;">
+                        DWDWW
+                    </p>
+                    <p style="color: var(--text-muted);">
+                        11/15 points
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ML Predictions -->
+        <section class="section">
+            <h2>ML Predictions</h2>
+            
+        <div class="grid">
+            <div class="card">
+                <h3>Win Probability</h3>
+                <div class="stat">
+                    <span class="stat-label">Probability</span>
+                    <span class="stat-value">100.0%</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">95% CI</span>
+                    <span class="stat-value">100.0% - 100.0%</span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Draw Probability</h3>
+                <div class="stat">
+                    <span class="stat-label">Probability</span>
+                    <span class="stat-value">0.0%</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">95% CI</span>
+                    <span class="stat-value">0.0% - 0.0%</span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Loss Probability</h3>
+                <div class="stat">
+                    <span class="stat-label">Probability</span>
+                    <span class="stat-value">0.0%</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">95% CI</span>
+                    <span class="stat-value">0.0% - 0.0%</span>
+                </div>
+            </div>
+        </div>
+        <p style="margin-top: 15px; color: var(--text-muted);">
+            Model Version: 1.0.0
+        </p>
+        
+        </section>
+
+        <!-- Value Opportunities -->
+        <section class="section">
+            <h2>Value Betting Opportunities</h2>
+            <p>No value opportunities identified.</p>
+        </section>
+
+        <!-- Odds Analysis -->
+        <section class="section">
+            <h2>Odds Analysis</h2>
+            <p>Odds data not available.</p>
+        </section>
+
+        <!-- Sentiment Analysis -->
+        <section class="section">
+            <h2>Sentiment Analysis</h2>
+            <p>Sentiment analysis not available.</p>
+        </section>
+
+        <!-- News & Quotes -->
+        <section class="section">
+            <h2>News & Quotes</h2>
+            <p>News data not available.</p>
+        </section>
+
+        <!-- Historical Data -->
+        <section class="section">
+            <h2>Historical Analysis</h2>
+            <div class="grid">
+            <div class="card">
+                <h3>Recent Form (Last 5 Games)</h3>
+                <div class="stat">
+                    <span class="stat-label">Form</span>
+                    <span class="stat-value" style="letter-spacing: 3px;">DWDWW</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Points</span>
+                    <span class="stat-value">11/15</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Goals Scored</span>
+                    <span class="stat-value">8</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Goals Conceded</span>
+                    <span class="stat-value">3</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Clean Sheets</span>
+                    <span class="stat-value">3</span>
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- Pipeline Status -->
+        <section class="section">
+            <h2>Pipeline Status</h2>
+            <table>
+            <tr><th>Phase</th><th>Status</th><th>Duration</th><th>Details</th></tr>
+        
+            <tr>
+                <td>Odds Collection</td>
+                <td class="status-error">Failed</td>
+                <td>0.00s</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">THE_ODDS_API_KEY environment variable not set</td>
+            </tr>
+            
+            <tr>
+                <td>News Scraping</td>
+                <td class="status-success">Success</td>
+                <td>0.00s</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">Skipped by configuration</td>
+            </tr>
+            
+            <tr>
+                <td>Historical Data</td>
+                <td class="status-success">Success</td>
+                <td>0.22s</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">-</td>
+            </tr>
+            
+            <tr>
+                <td>Ml Predictions</td>
+                <td class="status-success">Success</td>
+                <td>1.79s</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">-</td>
+            </tr>
+            
+            <tr>
+                <td>Sentiment Analysis</td>
+                <td class="status-success">Success</td>
+                <td>0.00s</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">Skipped by configuration</td>
+            </tr>
+            
+            <tr>
+                <td>Value Calculation</td>
+                <td class="status-success">Success</td>
+                <td>0.00s</td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">Missing ML predictions or odds data</td>
+            </tr>
+            </table>
+        </section>
+
+        <div class="footer">
+            <p>Arsenal Intelligence Brief | Generated: 2026-01-15T17:42:19.753086Z</p>
+            <p>Total Pipeline Duration: 0.00 seconds</p>
+            <p style="margin-top: 10px; font-size: 0.8rem;">
+                This report is for informational purposes only. Not financial advice.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,487 @@
+name: Arsenal Intelligence Brief
+
+# Schedule: Run daily at 18:00 UTC (1pm ET / 10am PT)
+# This is approximately 24 hours before typical match times,
+# giving time for report generation and delivery.
+on:
+  schedule:
+    # Run daily at 18:00 UTC (before typical Arsenal weekend matches)
+    - cron: '0 18 * * *'
+    # Also run Monday/Tuesday for midweek fixture prep
+    - cron: '0 10 * * 1,2'
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: 'Generate report even if no upcoming match'
+        required: false
+        type: boolean
+        default: false
+      match_date:
+        description: 'Optional: Specific match date (YYYY-MM-DD)'
+        required: false
+        type: string
+        default: ''
+      opponent:
+        description: 'Optional: Opponent team name'
+        required: false
+        type: string
+        default: ''
+
+# Concurrency: Only one intelligence brief job at a time
+concurrency:
+  group: intelligence-brief
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+  # Timezone for report timestamps
+  TZ: 'America/New_York'
+
+jobs:
+  generate-intelligence-brief:
+    name: Generate Intelligence Brief
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Outputs for downstream jobs (if needed)
+    outputs:
+      report_generated: ${{ steps.run-orchestrator.outputs.report_generated }}
+      match_id: ${{ steps.run-orchestrator.outputs.match_id }}
+      report_path: ${{ steps.run-orchestrator.outputs.report_path }}
+
+    steps:
+      # ========================================
+      # Step 1: Checkout Repository
+      # ========================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ========================================
+      # Step 2: Setup Python Environment
+      # ========================================
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # ========================================
+      # Step 3: Cache Dependencies
+      # ========================================
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/share/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # Cache ML models (transformers, scikit-learn)
+      - name: Cache ML models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            models/
+          key: ${{ runner.os }}-ml-models-v1
+          restore-keys: |
+            ${{ runner.os }}-ml-models-
+
+      # ========================================
+      # Step 4: Install Dependencies
+      # ========================================
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ========================================
+      # Step 5: Create Required Directories
+      # ========================================
+      - name: Create output directories
+        run: |
+          mkdir -p data/odds
+          mkdir -p data/news
+          mkdir -p data/lineups
+          mkdir -p data/cache
+          mkdir -p reports
+          mkdir -p logs
+
+      # ========================================
+      # Step 6: Fetch Next Arsenal Fixture
+      # ========================================
+      - name: Fetch Next Arsenal Fixture
+        id: fetch-fixture
+        env:
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          INPUT_MATCH_DATE: ${{ github.event.inputs.match_date }}
+          INPUT_OPPONENT: ${{ github.event.inputs.opponent }}
+          FORCE_RUN: ${{ github.event.inputs.force_run }}
+        run: |
+          echo "Fetching next Arsenal fixture..."
+
+          # If manual inputs provided, use them directly
+          if [ -n "$INPUT_MATCH_DATE" ] && [ -n "$INPUT_OPPONENT" ]; then
+            echo "Using manual inputs:"
+            echo "  Match Date: $INPUT_MATCH_DATE"
+            echo "  Opponent: $INPUT_OPPONENT"
+            echo "match_date=$INPUT_MATCH_DATE" >> $GITHUB_OUTPUT
+            echo "opponent=$INPUT_OPPONENT" >> $GITHUB_OUTPUT
+            echo "venue=home" >> $GITHUB_OUTPUT
+            echo "has_match=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check if API key is available
+          if [ -z "$FOOTBALL_DATA_API_KEY" ]; then
+            echo "FOOTBALL_DATA_API_KEY not set"
+            if [ "$FORCE_RUN" = "true" ]; then
+              echo "Force run enabled - using placeholder data"
+              echo "match_date=$(date -d '+3 days' '+%Y-%m-%d' 2>/dev/null || date -v+3d '+%Y-%m-%d')" >> $GITHUB_OUTPUT
+              echo "opponent=Unknown" >> $GITHUB_OUTPUT
+              echo "venue=home" >> $GITHUB_OUTPUT
+              echo "has_match=true" >> $GITHUB_OUTPUT
+            else
+              echo "has_match=false" >> $GITHUB_OUTPUT
+            fi
+            exit 0
+          fi
+
+          # Fetch fixtures from football-data.org API
+          RESPONSE=$(curl -s -H "X-Auth-Token: $FOOTBALL_DATA_API_KEY" \
+            "https://api.football-data.org/v4/teams/57/matches?status=SCHEDULED&limit=5")
+
+          # Check for errors
+          if echo "$RESPONSE" | grep -q '"error"'; then
+            echo "API Error: $(echo "$RESPONSE" | jq -r '.message // .error')"
+            echo "has_match=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Parse the response
+          MATCH_COUNT=$(echo "$RESPONSE" | jq '.matches | length')
+
+          if [ "$MATCH_COUNT" = "0" ] || [ "$MATCH_COUNT" = "null" ]; then
+            echo "No scheduled matches found"
+            echo "has_match=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get first match details
+          MATCH=$(echo "$RESPONSE" | jq '.matches[0]')
+          UTC_DATE=$(echo "$MATCH" | jq -r '.utcDate')
+          HOME_TEAM=$(echo "$MATCH" | jq -r '.homeTeam.name')
+          AWAY_TEAM=$(echo "$MATCH" | jq -r '.awayTeam.name')
+          COMPETITION=$(echo "$MATCH" | jq -r '.competition.name')
+
+          echo "Next match found:"
+          echo "  $HOME_TEAM vs $AWAY_TEAM"
+          echo "  Date: $UTC_DATE"
+          echo "  Competition: $COMPETITION"
+
+          # Determine opponent and venue
+          if echo "$HOME_TEAM" | grep -iq "arsenal"; then
+            OPPONENT="$AWAY_TEAM"
+            VENUE="home"
+          else
+            OPPONENT="$HOME_TEAM"
+            VENUE="away"
+          fi
+
+          # Extract date part (YYYY-MM-DD)
+          MATCH_DATE=$(echo "$UTC_DATE" | cut -d'T' -f1)
+
+          # Check if match is within 48 hours (only for scheduled runs)
+          if [ "$FORCE_RUN" != "true" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+            MATCH_TIMESTAMP=$(date -d "$MATCH_DATE" +%s 2>/dev/null || date -j -f "%Y-%m-%d" "$MATCH_DATE" +%s)
+            NOW_TIMESTAMP=$(date +%s)
+            HOURS_UNTIL_MATCH=$(( (MATCH_TIMESTAMP - NOW_TIMESTAMP) / 3600 ))
+
+            echo "Hours until match: $HOURS_UNTIL_MATCH"
+
+            if [ "$HOURS_UNTIL_MATCH" -gt 72 ] || [ "$HOURS_UNTIL_MATCH" -lt 0 ]; then
+              echo "Match is not within 72-hour window, skipping"
+              echo "has_match=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          # Set outputs
+          echo "match_date=$MATCH_DATE" >> $GITHUB_OUTPUT
+          echo "opponent=$OPPONENT" >> $GITHUB_OUTPUT
+          echo "venue=$VENUE" >> $GITHUB_OUTPUT
+          echo "competition=$COMPETITION" >> $GITHUB_OUTPUT
+          echo "has_match=true" >> $GITHUB_OUTPUT
+
+          echo ""
+          echo "Fixture details set for orchestrator:"
+          echo "  Match Date: $MATCH_DATE"
+          echo "  Opponent: $OPPONENT"
+          echo "  Venue: $VENUE"
+
+      # ========================================
+      # Step 7: Run the Intelligence Brief Orchestrator
+      # ========================================
+      - name: Run Intelligence Brief Orchestrator
+        id: run-orchestrator
+        if: steps.fetch-fixture.outputs.has_match == 'true'
+        env:
+          # API Keys from GitHub Secrets
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          THE_ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          # Reddit API (optional - for lineup scraping)
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          # Email settings (optional)
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+          # Notification settings (optional)
+          NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
+          # Timezone
+          USER_TIMEZONE: ${{ vars.USER_TIMEZONE || 'America/New_York' }}
+          # Match details from previous step
+          MATCH_DATE: ${{ steps.fetch-fixture.outputs.match_date }}
+          OPPONENT: ${{ steps.fetch-fixture.outputs.opponent }}
+          VENUE: ${{ steps.fetch-fixture.outputs.venue }}
+        run: |
+          echo "Starting Intelligence Brief Generation..."
+          echo "============================================"
+          echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "Match Date: $MATCH_DATE"
+          echo "Opponent: $OPPONENT"
+          echo "Venue: $VENUE"
+          echo "============================================"
+
+          # Create log file name
+          LOG_FILE="logs/orchestrator_$(date +%Y%m%d_%H%M%S).log"
+
+          # Run the orchestrator with required arguments
+          # The orchestrator will:
+          # 1. Fetch odds data from multiple bookmakers
+          # 2. Scrape news from Arsenal.com and BBC Sport
+          # 3. Load historical match data
+          # 4. Run ML predictions
+          # 5. Perform sentiment analysis
+          # 6. Calculate value betting opportunities
+          # 7. Generate HTML report
+
+          python orchestrator.py \
+            --opponent "$OPPONENT" \
+            --match-date "$MATCH_DATE" \
+            --venue "$VENUE" \
+            --output-dir reports \
+            --output-format both \
+            2>&1 | tee "$LOG_FILE"
+
+          # Capture exit code
+          exit_code=${PIPESTATUS[0]}
+
+          # Set outputs based on results
+          if ls reports/intelligence_brief_*.html 1> /dev/null 2>&1; then
+            REPORT_FILE=$(ls -t reports/intelligence_brief_*.html | head -1)
+            echo "report_generated=true" >> $GITHUB_OUTPUT
+            echo "report_path=$REPORT_FILE" >> $GITHUB_OUTPUT
+
+            # Extract match_id from report filename
+            match_id=$(basename "$REPORT_FILE" | sed 's/intelligence_brief_//' | sed 's/_[0-9]\{8\}_[0-9]\{6\}\.html//')
+            echo "match_id=$match_id" >> $GITHUB_OUTPUT
+
+            echo ""
+            echo "Report generated: $REPORT_FILE"
+            echo "Match ID: $match_id"
+          else
+            echo "report_generated=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "No report file found in reports directory"
+          fi
+
+          exit $exit_code
+        continue-on-error: false
+
+      # ========================================
+      # Step 7b: Skip notification when no match
+      # ========================================
+      - name: Skip - No Upcoming Match
+        if: steps.fetch-fixture.outputs.has_match != 'true'
+        run: |
+          echo "No upcoming match within the configured window."
+          echo "Skipping report generation."
+          echo "report_generated=false" >> $GITHUB_OUTPUT
+
+      # ========================================
+      # Step 8: Upload Report Artifacts
+      # ========================================
+      - name: Upload Intelligence Brief Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: intelligence-brief-${{ github.run_number }}
+          path: |
+            reports/*.html
+            reports/*.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # ========================================
+      # Step 9: Upload Logs
+      # ========================================
+      - name: Upload Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # ========================================
+      # Step 10: Upload Data Files (for debugging)
+      # ========================================
+      - name: Upload Data Files
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: data-debug-${{ github.run_number }}
+          path: |
+            data/odds/*.json
+            data/news/*.json
+            data/lineups/*.json
+          retention-days: 3
+          if-no-files-found: ignore
+
+      # ========================================
+      # Step 11: Job Summary
+      # ========================================
+      - name: Generate Job Summary
+        if: always()
+        env:
+          MATCH_DATE: ${{ steps.fetch-fixture.outputs.match_date }}
+          OPPONENT: ${{ steps.fetch-fixture.outputs.opponent }}
+          VENUE: ${{ steps.fetch-fixture.outputs.venue }}
+          HAS_MATCH: ${{ steps.fetch-fixture.outputs.has_match }}
+        run: |
+          echo "## Arsenal Intelligence Brief Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$HAS_MATCH" = "true" ]; then
+            echo "### Match Details" >> $GITHUB_STEP_SUMMARY
+            echo "- **Opponent:** $OPPONENT" >> $GITHUB_STEP_SUMMARY
+            echo "- **Date:** $MATCH_DATE" >> $GITHUB_STEP_SUMMARY
+            echo "- **Venue:** $VENUE" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.run-orchestrator.outputs.report_generated }}" = "true" ]; then
+            echo ":white_check_mark: **Report Generated Successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            if [ -n "${{ steps.run-orchestrator.outputs.match_id }}" ]; then
+              echo "**Match ID:** ${{ steps.run-orchestrator.outputs.match_id }}" >> $GITHUB_STEP_SUMMARY
+            fi
+          elif [ "$HAS_MATCH" != "true" ]; then
+            echo ":calendar: **No Upcoming Match**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No Arsenal match found within the 72-hour window." >> $GITHUB_STEP_SUMMARY
+            echo "Use workflow_dispatch with specific match details to generate a report manually." >> $GITHUB_STEP_SUMMARY
+          else
+            echo ":x: **Report Generation Failed**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs for more details. Common issues:" >> $GITHUB_STEP_SUMMARY
+            echo "- Missing API keys (ODDS_API_KEY, FOOTBALL_DATA_API_KEY)" >> $GITHUB_STEP_SUMMARY
+            echo "- Network/API errors" >> $GITHUB_STEP_SUMMARY
+            echo "- Python dependency issues" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reports:** Download from the Artifacts section below" >> $GITHUB_STEP_SUMMARY
+          echo "- **Logs:** Available for 7 days" >> $GITHUB_STEP_SUMMARY
+
+  # ========================================
+  # Optional: Send Failure Notification
+  # ========================================
+  notify-failure:
+    name: Notify on Failure
+    needs: generate-intelligence-brief
+    runs-on: ubuntu-latest
+    if: failure() && vars.NOTIFY_ON_FAILURE == 'true'
+
+    steps:
+      - name: Send failure notification
+        env:
+          NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
+        run: |
+          if [ -n "$NOTIFY_URL" ]; then
+            # Use curl to send notification via ntfy.sh or similar
+            # Parse the URL to extract the service
+            if [[ "$NOTIFY_URL" == ntfy://* ]]; then
+              # ntfy.sh notification
+              topic=$(echo "$NOTIFY_URL" | sed 's|ntfy://ntfy.sh/||')
+              curl -s \
+                -H "Title: Arsenal Intelligence Brief Failed" \
+                -H "Priority: high" \
+                -H "Tags: warning,soccer" \
+                -d "The scheduled intelligence brief failed to generate. Check the GitHub Actions logs for details." \
+                "https://ntfy.sh/$topic"
+            elif [[ "$NOTIFY_URL" == https://ntfy.sh/* ]]; then
+              # Direct ntfy.sh URL
+              curl -s \
+                -H "Title: Arsenal Intelligence Brief Failed" \
+                -H "Priority: high" \
+                -H "Tags: warning,soccer" \
+                -d "The scheduled intelligence brief failed to generate. Check the GitHub Actions logs for details." \
+                "$NOTIFY_URL"
+            fi
+            echo "Failure notification sent"
+          else
+            echo "No notification URL configured, skipping notification"
+          fi
+
+  # ========================================
+  # Optional: Send Success Notification with Report Link
+  # ========================================
+  notify-success:
+    name: Notify on Success
+    needs: generate-intelligence-brief
+    runs-on: ubuntu-latest
+    if: success() && needs.generate-intelligence-brief.outputs.report_generated == 'true'
+
+    steps:
+      - name: Send success notification
+        env:
+          NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
+          MATCH_ID: ${{ needs.generate-intelligence-brief.outputs.match_id }}
+        run: |
+          if [ -n "$NOTIFY_URL" ]; then
+            message="Intelligence Brief generated for ${MATCH_ID:-upcoming match}. View the report in GitHub Actions artifacts."
+
+            if [[ "$NOTIFY_URL" == ntfy://* ]]; then
+              topic=$(echo "$NOTIFY_URL" | sed 's|ntfy://ntfy.sh/||')
+              curl -s \
+                -H "Title: Arsenal Intelligence Brief Ready" \
+                -H "Priority: default" \
+                -H "Tags: soccer,chart_with_upwards_trend" \
+                -d "$message" \
+                "https://ntfy.sh/$topic"
+            elif [[ "$NOTIFY_URL" == https://ntfy.sh/* ]]; then
+              curl -s \
+                -H "Title: Arsenal Intelligence Brief Ready" \
+                -H "Priority: default" \
+                -H "Tags: soccer,chart_with_upwards_trend" \
+                -d "$message" \
+                "$NOTIFY_URL"
+            fi
+            echo "Success notification sent"
+          else
+            echo "No notification URL configured, skipping notification"
+          fi

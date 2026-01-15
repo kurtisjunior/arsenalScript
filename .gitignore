@@ -38,3 +38,20 @@ instance/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Data
+data/odds/*.json
+!data/odds/example_*.json
+data/lineups/*.json
+data/news/*.json
+data/historical/*.csv
+
+# Models
+models/*.pkl
+models/*.joblib
+
+# Cache
+.beads/cache/
+
+# Environment (additional)
+.env.local

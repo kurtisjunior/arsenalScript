@@ -2,9 +2,15 @@ name: Arsenal Match Notifier
 
 on:
   schedule:
-    # Run at 11 PM UTC (6 PM EST) daily
+    # Run at 23:00 UTC daily (~6pm ET in winter / ~7pm ET in summer)
     - cron: '0 23 * * *'
   workflow_dispatch:  # Allow manual triggers
+    inputs:
+      force_notify:
+        description: 'Send a test notification now (ignores timing checks)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   notify:
@@ -26,5 +32,10 @@ jobs:
         env:
           FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
           NOTIFY_URL: ${{ secrets.NOTIFY_URL }}
-          USER_TIMEZONE: 'America/New_York'
+          # Optional repo variables (Settings → Secrets and variables → Actions → Variables)
+          # Leave unset to use defaults in `main.py`.
+          USER_TIMEZONE: ${{ vars.USER_TIMEZONE }}
+          NOTIFY_LOCAL_TIME: ${{ vars.NOTIFY_LOCAL_TIME }}
+          NOTIFY_WINDOW_MINUTES: ${{ vars.NOTIFY_WINDOW_MINUTES }}
+          FORCE_NOTIFY: ${{ github.event.inputs.force_notify }}
         run: python main.py

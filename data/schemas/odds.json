@@ -1,0 +1,221 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arsenalscript.local/schemas/odds.json",
+  "title": "Odds Data Schema",
+  "description": "Schema for storing betting odds data for football matches, including multiple bookmaker odds and best value identification",
+  "type": "object",
+  "required": ["match_id", "timestamp", "bookmaker_odds", "best_value", "metadata"],
+  "properties": {
+    "match_id": {
+      "type": "string",
+      "description": "Unique identifier for the match, typically in format 'YYYYMMDD_HOME_AWAY' or external API reference"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp indicating when these odds were recorded"
+    },
+    "bookmaker_odds": {
+      "type": "array",
+      "description": "Array of odds from different bookmakers for this match",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["bookmaker", "home_win", "draw", "away_win"],
+        "properties": {
+          "bookmaker": {
+            "type": "string",
+            "description": "Name of the bookmaker (e.g., 'bet365', 'william_hill', 'betfair')"
+          },
+          "home_win": {
+            "type": "number",
+            "minimum": 1.0,
+            "description": "Decimal odds for home team winning (1X2 market - '1')"
+          },
+          "draw": {
+            "type": "number",
+            "minimum": 1.0,
+            "description": "Decimal odds for a draw (1X2 market - 'X')"
+          },
+          "away_win": {
+            "type": "number",
+            "minimum": 1.0,
+            "description": "Decimal odds for away team winning (1X2 market - '2')"
+          },
+          "over_2_5": {
+            "type": "number",
+            "minimum": 1.0,
+            "description": "Decimal odds for over 2.5 goals in the match (optional market)"
+          },
+          "under_2_5": {
+            "type": "number",
+            "minimum": 1.0,
+            "description": "Decimal odds for under 2.5 goals in the match (optional market)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "best_value": {
+      "type": "object",
+      "description": "Identifies the best available odds for each market across all bookmakers",
+      "required": ["home_win", "draw", "away_win"],
+      "properties": {
+        "home_win": {
+          "type": "object",
+          "description": "Best odds available for home win market",
+          "required": ["bookmaker", "odds"],
+          "properties": {
+            "bookmaker": {
+              "type": "string",
+              "description": "Bookmaker offering the best home win odds"
+            },
+            "odds": {
+              "type": "number",
+              "minimum": 1.0,
+              "description": "The best decimal odds for home win"
+            }
+          },
+          "additionalProperties": false
+        },
+        "draw": {
+          "type": "object",
+          "description": "Best odds available for draw market",
+          "required": ["bookmaker", "odds"],
+          "properties": {
+            "bookmaker": {
+              "type": "string",
+              "description": "Bookmaker offering the best draw odds"
+            },
+            "odds": {
+              "type": "number",
+              "minimum": 1.0,
+              "description": "The best decimal odds for draw"
+            }
+          },
+          "additionalProperties": false
+        },
+        "away_win": {
+          "type": "object",
+          "description": "Best odds available for away win market",
+          "required": ["bookmaker", "odds"],
+          "properties": {
+            "bookmaker": {
+              "type": "string",
+              "description": "Bookmaker offering the best away win odds"
+            },
+            "odds": {
+              "type": "number",
+              "minimum": 1.0,
+              "description": "The best decimal odds for away win"
+            }
+          },
+          "additionalProperties": false
+        },
+        "over_2_5": {
+          "type": "object",
+          "description": "Best odds available for over 2.5 goals market (optional)",
+          "required": ["bookmaker", "odds"],
+          "properties": {
+            "bookmaker": {
+              "type": "string",
+              "description": "Bookmaker offering the best over 2.5 goals odds"
+            },
+            "odds": {
+              "type": "number",
+              "minimum": 1.0,
+              "description": "The best decimal odds for over 2.5 goals"
+            }
+          },
+          "additionalProperties": false
+        },
+        "under_2_5": {
+          "type": "object",
+          "description": "Best odds available for under 2.5 goals market (optional)",
+          "required": ["bookmaker", "odds"],
+          "properties": {
+            "bookmaker": {
+              "type": "string",
+              "description": "Bookmaker offering the best under 2.5 goals odds"
+            },
+            "odds": {
+              "type": "number",
+              "minimum": 1.0,
+              "description": "The best decimal odds for under 2.5 goals"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Metadata about the odds data collection",
+      "required": ["source", "fetch_timestamp"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "The data source or API used to fetch these odds (e.g., 'odds-api', 'betfair-exchange', 'manual')"
+        },
+        "fetch_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp indicating when the data was fetched from the source"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "match_id": "20260118_ARS_CHE",
+      "timestamp": "2026-01-15T14:30:00Z",
+      "bookmaker_odds": [
+        {
+          "bookmaker": "bet365",
+          "home_win": 2.10,
+          "draw": 3.40,
+          "away_win": 3.50,
+          "over_2_5": 1.85,
+          "under_2_5": 1.95
+        },
+        {
+          "bookmaker": "william_hill",
+          "home_win": 2.15,
+          "draw": 3.30,
+          "away_win": 3.40,
+          "over_2_5": 1.80,
+          "under_2_5": 2.00
+        }
+      ],
+      "best_value": {
+        "home_win": {
+          "bookmaker": "william_hill",
+          "odds": 2.15
+        },
+        "draw": {
+          "bookmaker": "bet365",
+          "odds": 3.40
+        },
+        "away_win": {
+          "bookmaker": "bet365",
+          "odds": 3.50
+        },
+        "over_2_5": {
+          "bookmaker": "bet365",
+          "odds": 1.85
+        },
+        "under_2_5": {
+          "bookmaker": "william_hill",
+          "odds": 2.00
+        }
+      },
+      "metadata": {
+        "source": "odds-api",
+        "fetch_timestamp": "2026-01-15T14:29:45Z"
+      }
+    }
+  ]
+}

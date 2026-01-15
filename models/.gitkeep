@@ -1,0 +1,2 @@
+# This directory contains trained ML models
+# - match_predictor.pkl: Logistic regression model for match outcome prediction

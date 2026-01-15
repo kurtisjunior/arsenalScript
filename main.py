@@ -10,9 +10,15 @@ import apprise
 
 # Configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
-API_KEY = os.getenv("FOOTBALL_DATA_API_KEY")
-NOTIFY_URL = os.getenv("NOTIFY_URL")
-USER_TIMEZONE = os.getenv("USER_TIMEZONE", "America/New_York")
+API_KEY = os.getenv("FOOTBALL_DATA_API_KEY") or ""
+NOTIFY_URL = os.getenv("NOTIFY_URL") or ""
+USER_TIMEZONE = os.getenv("USER_TIMEZONE") or "America/New_York"
+NOTIFY_LOCAL_TIME = os.getenv("NOTIFY_LOCAL_TIME") or "18:00"  # 6pm local, night before
+try:
+    NOTIFY_WINDOW_MINUTES = int(os.getenv("NOTIFY_WINDOW_MINUTES") or "240")  # allow for GH schedule drift/DST
+except ValueError:
+    raise ValueError("NOTIFY_WINDOW_MINUTES must be an integer number of minutes (e.g. 240)")
+FORCE_NOTIFY = (os.getenv("FORCE_NOTIFY") or "").strip().lower() in {"1", "true", "yes", "y", "on"}
 ARSENAL_TEAM_ID = 57
 
 # Channel mapping
@@ -38,15 +44,31 @@ def get_next_fixture():
 
 
 def should_notify_today(match_utc_date):
-    """Check if we should send notification today (18 hours before match)"""
+    """Check if we should send a notification now.
+
+    The GitHub Action runs on a fixed daily schedule, so we notify at a fixed local
+    time on the day before the match (default 18:00). This avoids missing matches
+    with different kick-off times.
+    """
     user_tz = pytz.timezone(USER_TIMEZONE)
     now_local = datetime.now(user_tz)
     match_local = datetime.fromisoformat(match_utc_date.replace('Z', '+00:00')).astimezone(user_tz)
 
-    notify_time = match_local - timedelta(hours=18)
+    # Only notify on the day before the match (in the user's timezone)
+    if match_local.date() != (now_local.date() + timedelta(days=1)):
+        return False
+
+    try:
+        hour_str, minute_str = NOTIFY_LOCAL_TIME.split(":")
+        notify_hour = int(hour_str)
+        notify_minute = int(minute_str)
+    except Exception:
+        raise ValueError("NOTIFY_LOCAL_TIME must be in HH:MM 24-hour format (e.g. 18:00)")
+
+    notify_time = now_local.replace(hour=notify_hour, minute=notify_minute, second=0, microsecond=0)
     time_diff = abs((now_local - notify_time).total_seconds())
 
-    return time_diff < 3600  # Within 1 hour window
+    return time_diff <= (NOTIFY_WINDOW_MINUTES * 60)
 
 
 def format_notification(match):
@@ -58,13 +80,23 @@ def format_notification(match):
 
     user_tz = pytz.timezone(USER_TIMEZONE)
     local_time = match_time.astimezone(user_tz)
+    days_until = (local_time.date() - datetime.now(user_tz).date()).days
+
+    if days_until == 1:
+        headline = "🔴⚪ Arsenal Match Tomorrow!"
+    elif days_until == 0:
+        headline = "🔴⚪ Arsenal Match Today!"
+    elif days_until > 1:
+        headline = f"🔴⚪ Arsenal Match in {days_until} days!"
+    else:
+        headline = "🔴⚪ Arsenal Match Update!"
 
     is_home = "Arsenal" in home
     opponent = away if is_home else home
     location = "HOME" if is_home else "AWAY"
     channel = CHANNELS.get(competition, "Check local listings")
 
-    return f"""🔴⚪ Arsenal Match Tomorrow!
+    return f"""{headline}
 
 Arsenal vs {opponent}
 {competition} - {location} game
@@ -89,6 +121,11 @@ def main():
     logging.info("Arsenal Match Notifier - Started")
 
     try:
+        if not API_KEY:
+            raise RuntimeError("Missing FOOTBALL_DATA_API_KEY environment variable")
+        if not NOTIFY_URL:
+            raise RuntimeError("Missing NOTIFY_URL environment variable")
+
         # 1. Get next fixture
         match = get_next_fixture()
         if not match:
@@ -98,9 +135,11 @@ def main():
         logging.info(f"Next match: {match['homeTeam']['name']} vs {match['awayTeam']['name']}")
 
         # 2. Check if we should notify today
-        if not should_notify_today(match["utcDate"]):
+        if not FORCE_NOTIFY and not should_notify_today(match["utcDate"]):
             logging.info("Not time to notify yet")
             return
+        if FORCE_NOTIFY:
+            logging.info("FORCE_NOTIFY enabled; sending notification now")
 
         # 3. Format and send notification
         message = format_notification(match)

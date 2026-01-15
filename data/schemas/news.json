@@ -1,0 +1,206 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arsenalscript.local/schemas/news.json",
+  "title": "News Data Schema",
+  "description": "Schema for storing news articles and quotes related to football matches, including sentiment analysis and source tracking",
+  "type": "object",
+  "required": ["match_id", "timestamp", "articles", "quotes", "sentiment_scores", "metadata"],
+  "properties": {
+    "match_id": {
+      "type": "string",
+      "description": "Unique identifier for the match, typically in format 'YYYYMMDD_HOME_AWAY' or external API reference"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp indicating when this news data was last updated"
+    },
+    "articles": {
+      "type": "array",
+      "description": "Array of news articles related to this match",
+      "items": {
+        "type": "object",
+        "required": ["title", "url", "source", "publish_date"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Headline or title of the article"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to the original article"
+          },
+          "source": {
+            "type": "string",
+            "description": "Name of the publication or website (e.g., 'The Athletic', 'BBC Sport', 'Sky Sports')"
+          },
+          "author": {
+            "type": ["string", "null"],
+            "description": "Author of the article, null if not available"
+          },
+          "publish_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of when the article was published"
+          },
+          "full_text": {
+            "type": ["string", "null"],
+            "description": "Complete text content of the article, null if not scraped"
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "AI-generated or editorial summary of the article, null if not available"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "quotes": {
+      "type": "array",
+      "description": "Array of notable quotes from managers, players, or other figures related to the match",
+      "items": {
+        "type": "object",
+        "required": ["speaker", "quote", "source_url"],
+        "properties": {
+          "speaker": {
+            "type": "string",
+            "description": "Name and role of the person being quoted (e.g., 'Mikel Arteta (Arsenal Manager)')"
+          },
+          "quote": {
+            "type": "string",
+            "description": "The exact quote text"
+          },
+          "context": {
+            "type": ["string", "null"],
+            "description": "Context in which the quote was made (e.g., 'pre-match press conference', 'post-match interview'), null if unknown"
+          },
+          "source_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to the source where the quote was published"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "sentiment_scores": {
+      "type": "object",
+      "description": "Sentiment analysis scores for news coverage of the match",
+      "required": ["overall", "by_source"],
+      "properties": {
+        "overall": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "description": "Overall sentiment score across all sources (-1.0 very negative to 1.0 very positive)"
+        },
+        "by_source": {
+          "type": "array",
+          "description": "Sentiment breakdown by individual source",
+          "items": {
+            "type": "object",
+            "required": ["source", "score"],
+            "properties": {
+              "source": {
+                "type": "string",
+                "description": "Name of the publication or website"
+              },
+              "score": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1,
+                "description": "Sentiment score for this source (-1.0 very negative to 1.0 very positive)"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Metadata about the news data collection process",
+      "required": ["sources_scraped", "fetch_timestamp"],
+      "properties": {
+        "sources_scraped": {
+          "type": "array",
+          "description": "List of sources that were scraped for this data collection",
+          "items": {
+            "type": "string",
+            "description": "Name of a scraped source"
+          }
+        },
+        "fetch_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp indicating when the data was fetched from sources"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "match_id": "20260118_ARS_CHE",
+      "timestamp": "2026-01-17T12:00:00Z",
+      "articles": [
+        {
+          "title": "Arsenal vs Chelsea: Key Battles to Watch in London Derby",
+          "url": "https://www.bbc.co.uk/sport/football/arsenal-chelsea-preview",
+          "source": "BBC Sport",
+          "author": "Phil McNulty",
+          "publish_date": "2026-01-17T08:30:00Z",
+          "full_text": "The North London club faces their West London rivals in what promises to be a thrilling encounter...",
+          "summary": "Analysis of key tactical matchups and player battles ahead of the Arsenal vs Chelsea fixture."
+        },
+        {
+          "title": "Arteta: We Must Be at Our Best Against Chelsea",
+          "url": "https://www.theguardian.com/football/arteta-chelsea-preview",
+          "source": "The Guardian",
+          "author": "Jacob Steinberg",
+          "publish_date": "2026-01-16T16:45:00Z",
+          "full_text": null,
+          "summary": "Mikel Arteta previews the Chelsea match and discusses team news ahead of the London derby."
+        }
+      ],
+      "quotes": [
+        {
+          "speaker": "Mikel Arteta (Arsenal Manager)",
+          "quote": "Chelsea are a top side with excellent players. We need to be at our absolute best to get the result we want.",
+          "context": "pre-match press conference",
+          "source_url": "https://www.arsenal.com/news/arteta-press-conference"
+        },
+        {
+          "speaker": "Enzo Maresca (Chelsea Manager)",
+          "quote": "Arsenal is one of the best teams in Europe right now. It will be a great test for us.",
+          "context": "pre-match press conference",
+          "source_url": "https://www.chelseafc.com/news/maresca-speaks"
+        }
+      ],
+      "sentiment_scores": {
+        "overall": 0.35,
+        "by_source": [
+          {
+            "source": "BBC Sport",
+            "score": 0.40
+          },
+          {
+            "source": "The Guardian",
+            "score": 0.30
+          },
+          {
+            "source": "Sky Sports",
+            "score": 0.35
+          }
+        ]
+      },
+      "metadata": {
+        "sources_scraped": ["BBC Sport", "The Guardian", "Sky Sports", "The Athletic", "Arsenal.com", "ChelseaFC.com"],
+        "fetch_timestamp": "2026-01-17T11:55:00Z"
+      }
+    }
+  ]
+}
