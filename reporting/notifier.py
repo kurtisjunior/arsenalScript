@@ -258,7 +258,9 @@ class HTMLEmailSender:
 
         # Add inline images
         for cid, attachment in message.inline_images.items():
-            img = MIMEImage(attachment.content)
+            # Extract subtype from content_type (e.g., 'image/png' -> 'png')
+            subtype = attachment.content_type.split('/')[-1] if '/' in attachment.content_type else 'png'
+            img = MIMEImage(attachment.content, _subtype=subtype)
             img.add_header('Content-ID', f'<{cid}>')
             img.add_header('Content-Disposition', 'inline', filename=attachment.filename)
             root.attach(img)
@@ -266,7 +268,8 @@ class HTMLEmailSender:
         # Add regular attachments
         for attachment in message.attachments:
             if attachment.content_type.startswith('image/'):
-                part = MIMEImage(attachment.content)
+                subtype = attachment.content_type.split('/')[-1]
+                part = MIMEImage(attachment.content, _subtype=subtype)
             elif attachment.content_type.startswith('text/'):
                 part = MIMEText(attachment.content.decode('utf-8', errors='replace'))
             else:
