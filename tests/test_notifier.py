@@ -1016,3 +1016,301 @@ class TestEdgeCases:
 
         # BCC should not appear in any header
         assert "secret@example.com" not in mime_msg.as_string().split("\n\n")[0]
+
+
+# =============================================================================
+# TEST: EmailHTMLOptimizer
+# Task: arsenalScript-vqp.44 - Add inline charts and tables to notifications
+# =============================================================================
+
+class TestEmailHTMLOptimizer:
+    """Tests for EmailHTMLOptimizer class."""
+
+    @pytest.fixture
+    def optimizer(self):
+        """Create an optimizer instance."""
+        from reporting.notifier import EmailHTMLOptimizer
+        return EmailHTMLOptimizer(max_image_width=600)
+
+    def test_init_default_width(self):
+        """Test optimizer initialization with default width."""
+        from reporting.notifier import EmailHTMLOptimizer
+        optimizer = EmailHTMLOptimizer()
+        assert optimizer.max_image_width == 600
+
+    def test_init_custom_width(self):
+        """Test optimizer initialization with custom width."""
+        from reporting.notifier import EmailHTMLOptimizer
+        optimizer = EmailHTMLOptimizer(max_image_width=500)
+        assert optimizer.max_image_width == 500
+
+    def test_optimize_empty_html(self, optimizer):
+        """Test optimizing empty HTML."""
+        result = optimizer.optimize("")
+        assert result == ""
+
+    def test_optimize_none_html(self, optimizer):
+        """Test optimizing None HTML."""
+        result = optimizer.optimize(None)
+        assert result is None
+
+    def test_add_table_styles(self, optimizer):
+        """Test adding inline styles to tables."""
+        html = "<table><tr><th>Header</th></tr><tr><td>Data</td></tr></table>"
+        result = optimizer._add_table_styles(html)
+
+        assert 'style="' in result
+        assert "border-collapse" in result
+        assert "background-color: #063672" in result
+
+    def test_add_image_attributes(self, optimizer):
+        """Test adding attributes to images."""
+        html = '<img src="test.png" alt="Test">'
+        result = optimizer._add_image_attributes(html)
+
+        assert 'width="600"' in result
+        assert 'border="0"' in result
+        assert 'style="' in result
+
+    def test_add_image_attributes_preserves_existing(self, optimizer):
+        """Test that existing attributes are preserved."""
+        html = '<img src="test.png" alt="Test" width="400">'
+        result = optimizer._add_image_attributes(html)
+
+        # Should not add another width
+        assert result.count('width=') == 1
+        assert 'width="400"' in result
+
+    def test_add_chart_fallbacks(self, optimizer):
+        """Test adding fallback text for chart images."""
+        base64_data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        html = f'<img src="data:image/png;base64,{base64_data}" alt="Test Chart">'
+        result = optimizer._add_chart_fallbacks(html)
+
+        assert "chart-wrapper" in result
+        assert "noscript" in result
+        assert "[Test Chart]" in result
+
+    def test_ensure_doctype(self, optimizer):
+        """Test DOCTYPE is added if missing."""
+        html = "<html><body>Test</body></html>"
+        result = optimizer._ensure_doctype(html)
+
+        assert result.strip().startswith("<!DOCTYPE html>")
+
+    def test_ensure_doctype_preserves_existing(self, optimizer):
+        """Test existing DOCTYPE is preserved."""
+        html = "<!DOCTYPE html><html><body>Test</body></html>"
+        result = optimizer._ensure_doctype(html)
+
+        # Should not add duplicate DOCTYPE
+        assert result.count("<!DOCTYPE") == 1
+
+    def test_ensure_xmlns_added(self, optimizer):
+        """Test xmlns attribute is added for Outlook support."""
+        html = "<html><body>Test</body></html>"
+        result = optimizer._ensure_doctype(html)
+
+        assert 'xmlns="http://www.w3.org/1999/xhtml"' in result
+
+    def test_optimize_full_html(self, optimizer):
+        """Test full optimization pipeline."""
+        html = """
+        <html>
+        <body>
+            <table>
+                <tr><th>Column</th></tr>
+                <tr><td>Value</td></tr>
+            </table>
+            <img src="chart.png" alt="Chart">
+        </body>
+        </html>
+        """
+        result = optimizer.optimize(html)
+
+        # Should have DOCTYPE
+        assert "<!DOCTYPE html>" in result
+
+        # Should have table styles
+        assert "border-collapse" in result
+
+        # Should have image attributes
+        assert 'border="0"' in result
+
+    def test_create_inline_chart_html(self, optimizer):
+        """Test creating inline chart HTML."""
+        base64_data = "iVBORw0KGgo..."
+        result = optimizer.create_inline_chart_html(
+            base64_data=base64_data,
+            alt_text="Test Chart",
+            title="Chart Title"
+        )
+
+        assert f'src="data:image/png;base64,{base64_data}"' in result
+        assert 'alt="Test Chart"' in result
+        assert "Chart Title" in result
+        assert 'role="presentation"' in result
+
+    def test_create_inline_chart_html_no_title(self, optimizer):
+        """Test creating inline chart HTML without title."""
+        base64_data = "iVBORw0KGgo..."
+        result = optimizer.create_inline_chart_html(
+            base64_data=base64_data,
+            alt_text="Test Chart"
+        )
+
+        assert f'src="data:image/png;base64,{base64_data}"' in result
+        # No title paragraph
+        assert "<p style" not in result or "font-style: italic" not in result
+
+    def test_create_inline_chart_html_custom_width(self, optimizer):
+        """Test creating inline chart HTML with custom width."""
+        result = optimizer.create_inline_chart_html(
+            base64_data="test",
+            alt_text="Test",
+            width=400
+        )
+
+        assert 'width="400"' in result
+
+    def test_create_data_table_html(self, optimizer):
+        """Test creating data table HTML."""
+        headers = ["Outcome", "Odds", "Bookmaker"]
+        rows = [
+            ["Home Win", "2.10", "bet365"],
+            ["Draw", "3.40", "william_hill"],
+            ["Away Win", "3.50", "bet365"],
+        ]
+        result = optimizer.create_data_table_html(
+            headers=headers,
+            rows=rows,
+            title="Best Odds"
+        )
+
+        assert "Best Odds" in result
+        assert "Outcome" in result
+        assert "Home Win" in result
+        assert "2.10" in result
+        assert "bet365" in result
+
+    def test_create_data_table_html_with_highlight(self, optimizer):
+        """Test creating data table with highlighted column."""
+        headers = ["Outcome", "Odds"]
+        rows = [["Win", "2.10"]]
+        result = optimizer.create_data_table_html(
+            headers=headers,
+            rows=rows,
+            highlight_column=1
+        )
+
+        # Highlight column should have green color
+        assert "#28a745" in result
+
+    def test_create_data_table_html_alternating_rows(self, optimizer):
+        """Test alternating row colors in table."""
+        headers = ["Col"]
+        rows = [["Row1"], ["Row2"], ["Row3"]]
+        result = optimizer.create_data_table_html(headers=headers, rows=rows)
+
+        # Should have alternating background colors
+        assert "#ffffff" in result
+        assert "#f8f9fa" in result
+
+    def test_create_value_badge_html_positive(self, optimizer):
+        """Test value badge for positive value."""
+        result = optimizer.create_value_badge_html(7.5, "EV")
+
+        assert "+7.5%" in result
+        assert "#28a745" in result  # Green for positive
+
+    def test_create_value_badge_html_small_positive(self, optimizer):
+        """Test value badge for small positive value."""
+        result = optimizer.create_value_badge_html(2.5, "Edge")
+
+        assert "+2.5%" in result
+        assert "#ffc107" in result  # Yellow for small positive
+
+    def test_create_value_badge_html_negative(self, optimizer):
+        """Test value badge for negative value."""
+        result = optimizer.create_value_badge_html(-3.0, "EV")
+
+        assert "-3.0%" in result
+        assert "#dc3545" in result  # Red for negative
+
+
+class TestIntelligenceBriefNotifierWithOptimizer:
+    """Tests for IntelligenceBriefNotifier HTML optimization."""
+
+    @pytest.fixture
+    def valid_email_config(self):
+        """Create a valid email configuration."""
+        return EmailConfig(
+            smtp_host="smtp.gmail.com",
+            smtp_port=587,
+            smtp_user="sender@gmail.com",
+            smtp_password="app_password_123",
+            recipients=["recipient@example.com"],
+        )
+
+    @pytest.fixture
+    def mock_intelligence_brief(self):
+        """Create a mock IntelligenceBrief object."""
+        mock_brief = MagicMock()
+        mock_brief.match_id = "20260120_ARS_CHE"
+        mock_brief.home_team = "Arsenal"
+        mock_brief.away_team = "Chelsea"
+        mock_brief.match_date = "2026-01-20T15:00:00Z"
+        mock_brief.competition = "Premier League"
+        mock_brief.generated_at = "2026-01-19T10:00:00Z"
+        mock_brief.charts = {}
+        mock_brief.data_completeness = MagicMock()
+        mock_brief.data_completeness.completeness_score = 80.0
+        mock_brief.to_html.return_value = "<html><table><tr><td>Test</td></tr></table></html>"
+        return mock_brief
+
+    def test_notifier_with_optimizer_enabled(self, valid_email_config):
+        """Test notifier initializes with optimizer by default."""
+        notifier = IntelligenceBriefNotifier(valid_email_config)
+        assert notifier.optimize_html is True
+        assert notifier.optimizer is not None
+
+    def test_notifier_with_optimizer_disabled(self, valid_email_config):
+        """Test notifier with optimizer disabled."""
+        notifier = IntelligenceBriefNotifier(valid_email_config, optimize_html=False)
+        assert notifier.optimize_html is False
+        assert notifier.optimizer is None
+
+    @patch('reporting.notifier.smtplib.SMTP')
+    def test_send_report_optimizes_html(self, mock_smtp_class, valid_email_config, mock_intelligence_brief):
+        """Test that send_report optimizes HTML when enabled."""
+        mock_smtp_instance = MagicMock()
+        mock_smtp_class.return_value = mock_smtp_instance
+        mock_smtp_instance.__enter__ = Mock(return_value=mock_smtp_instance)
+        mock_smtp_instance.__exit__ = Mock(return_value=False)
+
+        notifier = IntelligenceBriefNotifier(valid_email_config, optimize_html=True)
+        success, error = notifier.send_report(mock_intelligence_brief)
+
+        assert success is True
+
+        # Check that HTML was optimized (has inline styles) - decode base64 content
+        call_args = mock_smtp_instance.sendmail.call_args
+        email_content = call_args[0][2]
+        # The HTML content is base64-encoded in the email, so decode it
+        decoded_content = base64.b64decode(
+            email_content.split("Content-Type: text/html")[1].split("--")[0].strip().split("\n\n")[1]
+        ).decode('utf-8')
+        assert "border-collapse" in decoded_content
+
+    @patch('reporting.notifier.smtplib.SMTP')
+    def test_send_report_skips_optimization(self, mock_smtp_class, valid_email_config, mock_intelligence_brief):
+        """Test that send_report can skip optimization."""
+        mock_smtp_instance = MagicMock()
+        mock_smtp_class.return_value = mock_smtp_instance
+        mock_smtp_instance.__enter__ = Mock(return_value=mock_smtp_instance)
+        mock_smtp_instance.__exit__ = Mock(return_value=False)
+
+        notifier = IntelligenceBriefNotifier(valid_email_config, optimize_html=False)
+        success, error = notifier.send_report(mock_intelligence_brief)
+
+        assert success is True

@@ -510,6 +510,319 @@ Powered by Arsenal Pulse
             return False, f"Connection failed: {e}"
 
 
+class EmailHTMLOptimizer:
+    """
+    Optimizes HTML content for email client compatibility.
+
+    Email clients have varying levels of CSS support. This class processes HTML to:
+    - Inline critical CSS styles directly on elements
+    - Add fallback text for images
+    - Ensure tables render properly across clients
+    - Add explicit dimensions to images
+    - Convert CSS-based styling to inline attributes
+
+    Task: arsenalScript-vqp.44 - Add inline charts and tables to notifications
+
+    Usage:
+        optimizer = EmailHTMLOptimizer()
+        optimized_html = optimizer.optimize(html_content)
+    """
+
+    # Arsenal color scheme for inline styles
+    COLORS = {
+        'red': '#EF0107',
+        'navy': '#063672',
+        'gold': '#9C824A',
+        'white': '#FFFFFF',
+        'light_gray': '#f5f5f5',
+        'dark_gray': '#333333',
+        'success': '#28a745',
+        'warning': '#ffc107',
+        'danger': '#dc3545',
+    }
+
+    # Common inline styles for email clients
+    TABLE_STYLES = (
+        'border-collapse: collapse; '
+        'width: 100%; '
+        'margin: 15px 0; '
+        'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;'
+    )
+
+    TH_STYLES = (
+        'background-color: #063672; '
+        'color: white; '
+        'padding: 12px 10px; '
+        'text-align: left; '
+        'font-weight: 600; '
+        'font-size: 13px; '
+        'border: 1px solid #063672;'
+    )
+
+    TD_STYLES = (
+        'padding: 10px; '
+        'border: 1px solid #e9ecef; '
+        'font-size: 14px; '
+        'color: #333333;'
+    )
+
+    IMG_STYLES = (
+        'max-width: 100%; '
+        'height: auto; '
+        'display: block; '
+        'margin: 10px auto;'
+    )
+
+    def __init__(self, max_image_width: int = 600):
+        """
+        Initialize the optimizer.
+
+        Args:
+            max_image_width: Maximum width for images in pixels
+        """
+        self.max_image_width = max_image_width
+        self.logger = logging.getLogger(f"{__name__}.EmailHTMLOptimizer")
+
+    def optimize(self, html: str) -> str:
+        """
+        Optimize HTML for email client compatibility.
+
+        Args:
+            html: Original HTML content
+
+        Returns:
+            Optimized HTML with inline styles
+        """
+        if not html:
+            return html
+
+        # Apply optimizations in order
+        html = self._add_table_styles(html)
+        html = self._add_image_attributes(html)
+        html = self._add_chart_fallbacks(html)
+        html = self._ensure_doctype(html)
+
+        return html
+
+    def _add_table_styles(self, html: str) -> str:
+        """Add inline styles to tables for email compatibility."""
+        # Add styles to <table> tags that don't have inline styles
+        html = re.sub(
+            r'<table([^>]*?)(?<!style=")>',
+            lambda m: f'<table{m.group(1)} style="{self.TABLE_STYLES}">',
+            html,
+            flags=re.IGNORECASE
+        )
+
+        # Add styles to <th> tags
+        html = re.sub(
+            r'<th([^>]*?)(?<!style=")>',
+            lambda m: f'<th{m.group(1)} style="{self.TH_STYLES}">',
+            html,
+            flags=re.IGNORECASE
+        )
+
+        # Add styles to <td> tags that don't have inline styles
+        html = re.sub(
+            r'<td([^>]*?)(?<!style=")>',
+            lambda m: f'<td{m.group(1)} style="{self.TD_STYLES}">',
+            html,
+            flags=re.IGNORECASE
+        )
+
+        return html
+
+    def _add_image_attributes(self, html: str) -> str:
+        """Add width, height, and style attributes to images."""
+        def process_img(match):
+            tag = match.group(0)
+
+            # Add style if not present
+            if 'style=' not in tag.lower():
+                tag = tag.replace('>', f' style="{self.IMG_STYLES}">')
+
+            # Add width attribute if not present
+            if 'width=' not in tag.lower():
+                tag = tag.replace('>', f' width="{self.max_image_width}">')
+
+            # Ensure border="0" for email clients
+            if 'border=' not in tag.lower():
+                tag = tag.replace('>', ' border="0">')
+
+            return tag
+
+        return re.sub(r'<img[^>]+>', process_img, html, flags=re.IGNORECASE)
+
+    def _add_chart_fallbacks(self, html: str) -> str:
+        """Add fallback text for chart images."""
+        # Pattern to find chart images with base64 data
+        pattern = r'(<img[^>]*src="data:image/[^"]*base64,[^"]*"[^>]*alt="([^"]*)"[^>]*>)'
+
+        def add_fallback(match):
+            img_tag = match.group(1)
+            alt_text = match.group(2) or "Chart"
+
+            # Wrap in a div with noscript fallback
+            return f'''<div class="chart-wrapper">
+                {img_tag}
+                <!--[if !mso]><!-->
+                <noscript>
+                    <p style="text-align: center; color: #666; font-style: italic;">[{alt_text}]</p>
+                </noscript>
+                <!--<![endif]-->
+            </div>'''
+
+        return re.sub(pattern, add_fallback, html, flags=re.IGNORECASE)
+
+    def _ensure_doctype(self, html: str) -> str:
+        """Ensure proper DOCTYPE and html attributes for email."""
+        if not html.strip().lower().startswith('<!doctype'):
+            html = '<!DOCTYPE html>\n' + html
+
+        # Add xmlns for better Outlook support
+        if 'xmlns=' not in html:
+            html = html.replace(
+                '<html',
+                '<html xmlns="http://www.w3.org/1999/xhtml"',
+                1
+            )
+
+        return html
+
+    def create_inline_chart_html(
+        self,
+        base64_data: str,
+        alt_text: str,
+        title: Optional[str] = None,
+        width: Optional[int] = None
+    ) -> str:
+        """
+        Create email-compatible HTML for an inline chart.
+
+        Args:
+            base64_data: Base64-encoded image data
+            alt_text: Alt text for the image
+            title: Optional title below the chart
+            width: Optional width (defaults to max_image_width)
+
+        Returns:
+            HTML string for the chart
+        """
+        img_width = width or self.max_image_width
+
+        html = f'''
+        <table role="presentation" style="width: 100%; border: none; margin: 20px 0;">
+            <tr>
+                <td style="text-align: center; padding: 0;">
+                    <img src="data:image/png;base64,{base64_data}"
+                         alt="{alt_text}"
+                         width="{img_width}"
+                         style="{self.IMG_STYLES}"
+                         border="0" />
+        '''
+
+        if title:
+            html += f'''
+                    <p style="text-align: center; color: #666; font-size: 12px; margin-top: 8px; font-style: italic;">
+                        {title}
+                    </p>
+            '''
+
+        html += '''
+                </td>
+            </tr>
+        </table>
+        '''
+
+        return html
+
+    def create_data_table_html(
+        self,
+        headers: List[str],
+        rows: List[List[str]],
+        title: Optional[str] = None,
+        highlight_column: Optional[int] = None
+    ) -> str:
+        """
+        Create an email-compatible HTML table.
+
+        Args:
+            headers: List of header strings
+            rows: List of row data (each row is a list of cell strings)
+            title: Optional table title
+            highlight_column: Column index to highlight (for best value, etc.)
+
+        Returns:
+            HTML string for the table
+        """
+        html = ''
+
+        if title:
+            html += f'''
+            <p style="font-weight: 600; color: #063672; margin-bottom: 10px; font-size: 14px;">
+                {title}
+            </p>
+            '''
+
+        html += f'<table style="{self.TABLE_STYLES}">'
+
+        # Headers
+        html += '<tr>'
+        for header in headers:
+            html += f'<th style="{self.TH_STYLES}">{header}</th>'
+        html += '</tr>'
+
+        # Rows
+        for i, row in enumerate(rows):
+            bg_color = '#f8f9fa' if i % 2 == 1 else '#ffffff'
+            html += '<tr>'
+            for j, cell in enumerate(row):
+                cell_style = self.TD_STYLES + f' background-color: {bg_color};'
+                if highlight_column is not None and j == highlight_column:
+                    cell_style += ' color: #28a745; font-weight: 700;'
+                html += f'<td style="{cell_style}">{cell}</td>'
+            html += '</tr>'
+
+        html += '</table>'
+
+        return html
+
+    def create_value_badge_html(self, value: float, label: str) -> str:
+        """
+        Create an email-compatible value badge (for EV%, edge, etc.).
+
+        Args:
+            value: Numeric value
+            label: Label for the badge
+
+        Returns:
+            HTML string for the badge
+        """
+        if value > 5:
+            bg_color = '#28a745'
+            text_color = '#ffffff'
+        elif value > 0:
+            bg_color = '#ffc107'
+            text_color = '#333333'
+        else:
+            bg_color = '#dc3545'
+            text_color = '#ffffff'
+
+        return f'''
+        <span style="
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            background-color: {bg_color};
+            color: {text_color};
+        ">
+            {label}: {value:+.1f}%
+        </span>
+        '''
+
+
 class IntelligenceBriefNotifier:
     """
     High-level notifier specifically for Arsenal Intelligence Briefs.
@@ -529,10 +842,18 @@ class IntelligenceBriefNotifier:
         success = notifier.send_report(report)
     """
 
-    def __init__(self, config: Optional[EmailConfig] = None):
-        """Initialize the notifier with optional email configuration."""
+    def __init__(self, config: Optional[EmailConfig] = None, optimize_html: bool = True):
+        """
+        Initialize the notifier with optional email configuration.
+
+        Args:
+            config: EmailConfig instance. If None, loads from environment.
+            optimize_html: Whether to optimize HTML for email client compatibility
+        """
         self.config = config or EmailConfig.from_env()
         self.sender = HTMLEmailSender(self.config)
+        self.optimize_html = optimize_html
+        self.optimizer = EmailHTMLOptimizer() if optimize_html else None
         self.logger = logging.getLogger(f"{__name__}.IntelligenceBriefNotifier")
 
     def send_report(
@@ -540,6 +861,7 @@ class IntelligenceBriefNotifier:
         report: Any,  # IntelligenceBrief from report_builder
         recipients: Optional[List[str]] = None,
         include_charts_as_attachments: bool = False,
+        optimize_for_email: Optional[bool] = None,
     ) -> Tuple[bool, Optional[str]]:
         """
         Send an IntelligenceBrief report via email.
@@ -548,6 +870,7 @@ class IntelligenceBriefNotifier:
             report: IntelligenceBrief object from ReportBuilder
             recipients: Optional list of email recipients (overrides config)
             include_charts_as_attachments: Whether to attach charts as separate files
+            optimize_for_email: Override HTML optimization (None uses class default)
 
         Returns:
             Tuple of (success: bool, error_message: Optional[str])
@@ -555,6 +878,12 @@ class IntelligenceBriefNotifier:
         try:
             # Generate HTML content
             html_content = report.to_html()
+
+            # Optimize HTML for email clients
+            should_optimize = optimize_for_email if optimize_for_email is not None else self.optimize_html
+            if should_optimize and self.optimizer:
+                html_content = self.optimizer.optimize(html_content)
+                self.logger.info("HTML content optimized for email clients")
 
             # Build subject line
             subject = f"Arsenal Intelligence Brief - {report.home_team} vs {report.away_team}"
